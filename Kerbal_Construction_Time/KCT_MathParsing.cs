@@ -27,6 +27,7 @@ namespace KerbalConstructionTime
                 case "UpgradeReset": return ParseMath(KCT_PresetManager.Instance.ActivePreset.formulaSettings.UpgradeResetFormula, variables);
                 case "InventorySales": return ParseMath(KCT_PresetManager.Instance.ActivePreset.formulaSettings.InventorySaleFormula, variables);
                 case "RolloutCost": return ParseMath(KCT_PresetManager.Instance.ActivePreset.formulaSettings.RolloutCostFormula, variables);
+                case "NewLaunchPadCost": return ParseMath(KCT_PresetManager.Instance.ActivePreset.formulaSettings.NewLaunchPadCostFormula, variables);
                 default: return 0;
             }
         }
@@ -246,6 +247,8 @@ namespace KerbalConstructionTime
                 numNodes = ResearchAndDevelopment.Instance.snapshot.GetData().GetNodes("Tech").Length;
             variables.Add("S", numNodes.ToString());
 
+            AddCrewVariables(variables);
+
             return GetStandardFormulaValue("BuildRate", variables);
         }
 
@@ -261,11 +264,16 @@ namespace KerbalConstructionTime
             variables.Add("O", KCT_PresetManager.Instance.ActivePreset.timeSettings.OverallMultiplier.ToString());
             variables.Add("I", index.ToString());
 
+            AddCrewVariables(variables);
+
             return GetStandardFormulaValue("Node", variables);
         }
 
         public static double ParseRolloutCostFormula(KCT_BuildListVessel vessel)
         {
+            if (!KCT_PresetManager.Instance.ActivePreset.generalSettings.Enabled || !KCT_PresetManager.Instance.ActivePreset.generalSettings.ReconditioningTimes)
+                return 0;
+
             double loadedMass, emptyMass, loadedCost, emptyCost;
             loadedCost = vessel.GetTotalCost();
             emptyCost = vessel.emptyCost;
@@ -279,7 +287,7 @@ namespace KerbalConstructionTime
             if (vessel.type == KCT_BuildListVessel.ListType.VAB)
             {
                 EditorLevel = KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.VehicleAssemblyBuilding);
-                LaunchSiteLvl = KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.LaunchPad);
+                LaunchSiteLvl = KCT_GameStates.ActiveKSC.ActiveLPInstance.level;//KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.LaunchPad);
                 isVABVessel = 1;
             }
             else if (vessel.type == KCT_BuildListVessel.ListType.SPH)
@@ -298,6 +306,8 @@ namespace KerbalConstructionTime
             variables.Add("BP", BP.ToString());
             variables.Add("L", LaunchSiteLvl.ToString());
             variables.Add("EL", EditorLevel.ToString());
+
+            AddCrewVariables(variables);
 
             return GetStandardFormulaValue("RolloutCost", variables);
         }
@@ -319,7 +329,7 @@ namespace KerbalConstructionTime
             if (vessel.type == KCT_BuildListVessel.ListType.VAB)
             {
                 EditorLevel = KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.VehicleAssemblyBuilding);
-                LaunchSiteLvl = KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.LaunchPad);
+                LaunchSiteLvl = KCT_GameStates.ActiveKSC.ActiveLPInstance.level;//KCT_Utilities.BuildingUpgradeLevel(SpaceCenterFacility.LaunchPad);
                 isVABVessel = 1;
             }
             else
@@ -347,7 +357,81 @@ namespace KerbalConstructionTime
             variables.Add("RE", isRecon.ToString());
             variables.Add("S", KCT_PresetManager.Instance.ActivePreset.timeSettings.RolloutReconSplit.ToString());
 
+            AddCrewVariables(variables);
+
             return GetStandardFormulaValue("Reconditioning", variables);
+        }
+
+        public static void AddCrewVariables(Dictionary<string, string> crewVars)
+        {
+            //Dictionary<string, string> crewVars = new Dictionary<string, string>();
+            int pilots=0, engineers=0, scientists=0;
+            int pLevels=0, eLevels=0, sLevels=0;
+
+            int pilots_total = 0, engineers_total = 0, scientists_total = 0;
+            int pLevels_total = 0, eLevels_total = 0, sLevels_total = 0;
+
+            foreach (ProtoCrewMember pcm in HighLogic.CurrentGame.CrewRoster.Crew)
+            {
+                if (pcm.rosterStatus == ProtoCrewMember.RosterStatus.Available || pcm.rosterStatus == ProtoCrewMember.RosterStatus.Assigned)
+                {
+                    if (pcm.trait == "Pilot")
+                    {
+                        if (pcm.rosterStatus == ProtoCrewMember.RosterStatus.Available)
+                        {
+                            pilots++;
+                            pLevels += pcm.experienceLevel;
+                        }
+                        pilots_total++;
+                        pLevels_total += pcm.experienceLevel;
+                    }
+                    else if (pcm.trait == "Engineer")
+                    {
+                        if (pcm.rosterStatus == ProtoCrewMember.RosterStatus.Available)
+                        {
+                            engineers++;
+                            eLevels += pcm.experienceLevel;
+                        }
+                        engineers_total++;
+                        eLevels_total += pcm.experienceLevel;
+                    }
+                    else if (pcm.trait == "Scientist")
+                    {
+                        if (pcm.rosterStatus == ProtoCrewMember.RosterStatus.Available)
+                        {
+                            scientists++;
+                            sLevels += pcm.experienceLevel;
+                        }
+                        scientists_total++;
+                        sLevels_total += pcm.experienceLevel;
+                    }
+                }
+                
+            }
+
+            //KCTDebug.Log(pilots + " pilots " + pLevels + " levels");
+            //KCTDebug.Log(engineers + " engineers " + eLevels + " levels");
+            //KCTDebug.Log(scientists + " scientists " + sLevels + " levels");
+
+            crewVars.Add("PiK", pilots.ToString());
+            crewVars.Add("PiL", pLevels.ToString());
+
+            crewVars.Add("EnK", engineers.ToString());
+            crewVars.Add("EnL", eLevels.ToString());
+
+            crewVars.Add("ScK", scientists.ToString());
+            crewVars.Add("ScL", sLevels.ToString());
+
+            crewVars.Add("TPiK", pilots_total.ToString());
+            crewVars.Add("TPiL", pLevels_total.ToString());
+
+            crewVars.Add("TEnK", engineers_total.ToString());
+            crewVars.Add("TEnL", eLevels_total.ToString());
+
+            crewVars.Add("TScK", scientists_total.ToString());
+            crewVars.Add("TScL", sLevels_total.ToString());
+
+            //return crewVars;
         }
     }
 }

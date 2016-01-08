@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace KerbalConstructionTime
@@ -70,6 +71,84 @@ namespace KerbalConstructionTime
             {
                 return "00:00:00:00";
             }
+        }
+
+        public static double ParseTimeString(string timeString, bool toUT = true)
+        {
+            //if it doesn't contain colons, we assume it's not colon formatted
+            if (timeString.Contains(":"))
+            {
+                return ParseColonFormattedTime(timeString, toUT);
+            }
+            else if (timeString.Contains("s") || timeString.Contains("m") || timeString.Contains("h") || timeString.Contains("d") || timeString.Contains("y"))
+            {
+                return ParseCommonFormattedTime(timeString, toUT);
+            }
+            else
+            {
+                return double.Parse(timeString);
+            }
+                
+        }
+
+        public static double ParseCommonFormattedTime(string timeString, bool toUT=true)
+        {
+            //parses strings like "12d 14h 32m" or "3y8d"
+            double time = -1;
+            timeString = timeString.ToLower(); //make sure everything is lowercase
+            string[] parts = Regex.Split(timeString, "([a-z])");//split on characters (should also include the character as the next element of the array)
+            int len = parts.Length;
+            double sPerDay = GameSettings.KERBIN_TIME ? 6 * 3600 : 24 * 3600;
+            double sPerYear = GameSettings.KERBIN_TIME ? 426 * sPerDay : 365 * sPerDay;
+
+            //loop over all the elements, if it's y,d,h,m,s then take the previous element as the number
+            if (len > 1)
+            {
+                for (int i = 1; i < len; i++)
+                {
+                    double multiplier = 1;
+                    double value = 0;
+
+                    string s = parts[i].Trim();
+                    if (s == "s")
+                    {
+                        //seconds
+                        multiplier = 1;
+                        double.TryParse(parts[i - 1], out value);
+                    }
+                    else if (s == "m")
+                    {
+                        //minutes
+                        multiplier = 60;
+                        double.TryParse(parts[i - 1], out value);
+                    }
+                    else if (s == "h")
+                    {
+                        //hours
+                        multiplier = 3600;
+                        double.TryParse(parts[i - 1], out value);
+                    }
+                    else if (s == "d")
+                    {
+                        //days
+                        multiplier = sPerDay;
+                        double.TryParse(parts[i - 1], out value);
+                        if (toUT)
+                            value -= 1;
+                    }
+                    else if (s == "y")
+                    {
+                        //years
+                        multiplier = sPerYear;
+                        double.TryParse(parts[i - 1], out value);
+                        if (toUT)
+                            value -= 1;
+                    }
+
+                    time += multiplier * value;
+                }
+            }
+            return time;
         }
 
         public static double ParseColonFormattedTime(string timeString, bool toUT=true)
@@ -567,7 +646,16 @@ namespace KerbalConstructionTime
                             }
                         }
                     }
-
+                    //Reset the associated launchpad id when rollback completes
+                    ksc.Recon_Rollout.ForEach(delegate(KCT_Recon_Rollout rr)
+                    {
+                        if (rr.RRType == KCT_Recon_Rollout.RolloutReconType.Rollback && rr.AsBuildItem().IsComplete())
+                        {
+                            KCT_BuildListVessel blv = KCT_Utilities.FindBLVesselByID(new Guid(rr.associatedID));
+                            if (blv != null)
+                                blv.launchSiteID = -1;
+                        }
+                    });
                     ksc.Recon_Rollout.RemoveAll(rr => !KCT_PresetManager.Instance.ActivePreset.generalSettings.ReconditioningTimes || (rr.RRType != KCT_Recon_Rollout.RolloutReconType.Rollout && rr.AsBuildItem().IsComplete()));
 
                     foreach (KCT_UpgradingBuilding kscTech in ksc.KSCTech)
@@ -633,8 +721,11 @@ namespace KerbalConstructionTime
         public static float GetPartCostFromNode(ConfigNode part, bool includeFuel = true)
         {
             string name = PartNameFromNode(part);
+            AvailablePart aPart = GetAvailablePartByName(name);
+            if (aPart == null)
+                return 0;
             float dry, wet;
-            float total = ShipConstruction.GetPartCosts(part, GetAvailablePartByName(name), out dry, out wet);
+            float total = ShipConstruction.GetPartCosts(part, aPart, out dry, out wet);
             if (includeFuel)
                 return total;
             else
@@ -662,8 +753,10 @@ namespace KerbalConstructionTime
                     wet = dry + p.partPrefab.GetResourceMass();
                 }
             }*/
-
-            total = ShipConstruction.GetPartTotalMass(part, GetAvailablePartByName(PartNameFromNode(part)), out dry, out wet);
+            AvailablePart aPart = GetAvailablePartByName(PartNameFromNode(part));
+            if (aPart == null)
+                return 0;
+            total = ShipConstruction.GetPartTotalMass(part, aPart, out dry, out wet);
             if (includeFuel)
                 return total;
             else
@@ -1179,7 +1272,7 @@ namespace KerbalConstructionTime
                 simulationLength = "31536000000"; //1000 Earth years
             CelestialBody Kerbin = Planetarium.fetch.Home;
 
-            double length = KCT_Utilities.ParseColonFormattedTime(simulationLength, false);
+            double length = KCT_Utilities.ParseTimeString(simulationLength, false);
             length = Math.Min(length, 31536000000.0);
             if (length == 0)
                 length = 31536000000.0;
@@ -1483,17 +1576,16 @@ namespace KerbalConstructionTime
 
         public static void RampUpWarp(IKCTBuildItem item)
         {
-            int lastRateIndex = TimeWarp.CurrentRateIndex;
-            int newRate = TimeWarp.CurrentRateIndex + 1;
+            int newRate = TimeWarp.CurrentRateIndex;
             double timeLeft = item.GetTimeLeft();
             if (double.IsPositiveInfinity(timeLeft))
                 timeLeft = KCT_Utilities.NextThingToFinish().GetTimeLeft();
-            while ((timeLeft > 15 * TimeWarp.deltaTime) && (TimeWarp.CurrentRateIndex < KCT_GameStates.settings.MaxTimeWarp) && (lastRateIndex < newRate))
+            while ((newRate + 1 < TimeWarp.fetch.warpRates.Length) && (timeLeft > TimeWarp.fetch.warpRates[newRate + 1]*Planetarium.fetch.fixedDeltaTime) && (newRate < KCT_GameStates.settings.MaxTimeWarp))
             {
-                lastRateIndex = TimeWarp.CurrentRateIndex;
-                TimeWarp.SetRate(lastRateIndex + 1, true);
-                newRate = TimeWarp.CurrentRateIndex;
+                newRate++;
             }
+            TimeWarp.SetRate(newRate, true);
+          //  Debug.Log("Fixed Delta Time: " + Planetarium.fetch.fixedDeltaTime);
         }
 
         public static void DisableModFunctionality()
@@ -1527,9 +1619,22 @@ namespace KerbalConstructionTime
         {
             if (ksc == null) ksc = KCT_GameStates.ActiveKSC;
             int spentPoints = 0;
-            foreach (int i in ksc.VABUpgrades) spentPoints += i;
-            foreach (int i in ksc.SPHUpgrades) spentPoints += i;
-            foreach (int i in ksc.RDUpgrades) spentPoints += i;
+            if (KCT_PresetManager.Instance.ActivePreset.generalSettings.SharedUpgradePool)
+            {
+                foreach (KCT_KSC KSC in KCT_GameStates.KSCs)
+                {
+                    foreach (int i in KSC.VABUpgrades) spentPoints += i;
+                    foreach (int i in KSC.SPHUpgrades) spentPoints += i;
+                    spentPoints += KSC.RDUpgrades[0];
+                }
+                spentPoints += ksc.RDUpgrades[1]; //only count this once, all KSCs share this value
+            }
+            else
+            {
+                foreach (int i in ksc.VABUpgrades) spentPoints += i;
+                foreach (int i in ksc.SPHUpgrades) spentPoints += i;
+                foreach (int i in ksc.RDUpgrades) spentPoints += i;
+            }
             return spentPoints;
         }
 
@@ -1787,18 +1892,31 @@ namespace KerbalConstructionTime
         public static string GetActiveRSSKSC()
         {
             if (!KSCSwitcherInstalled) return "Stock";
-            Type Switcher = AssemblyLoader.loadedAssemblies
+            /*Type Switcher = AssemblyLoader.loadedAssemblies
                     .Select(a => a.assembly.GetExportedTypes())
                     .SelectMany(t => t)
                     .FirstOrDefault(t => t.FullName == "regexKSP.KSCSwitcher");
 
             UnityEngine.Object KSCSwitcherInstance = GameObject.FindObjectOfType(Switcher);
 
-            return (string)GetMemberInfoValue(Switcher.GetMember("activeSite")[0], KSCSwitcherInstance);
+            return (string)GetMemberInfoValue(Switcher.GetMember("activeSite")[0], KSCSwitcherInstance);*/
 
-            //System.Reflection.FieldInfo site = RSS.GetField("activeSite");
+            //get the LastKSC.KSCLoader.instance object
+            //check the Sites object (KSCSiteManager) for the lastSite, if "" then get defaultSite
+            Type Loader = AssemblyLoader.loadedAssemblies
+                    .Select(a => a.assembly.GetExportedTypes())
+                    .SelectMany(t => t)
+                    .FirstOrDefault(t => t.FullName == "regexKSP.KSCLoader");
+            object LoaderInstance = GetMemberInfoValue(Loader.GetMember("instance")[0], null);
+            object SitesObj = GetMemberInfoValue(Loader.GetMember("Sites")[0], LoaderInstance);
+            string lastSite = (string)GetMemberInfoValue(SitesObj.GetType().GetMember("lastSite")[0], SitesObj);
 
-            //return (string)KCT_Utilities.GetMemberInfoValue(site, null);
+            if (lastSite == "")
+            {
+                string defaultSite = (string)GetMemberInfoValue(SitesObj.GetType().GetMember("defaultSite")[0], SitesObj);
+                return defaultSite;
+            }
+            return lastSite;
         }
 
         public static void SetActiveKSCToRSS()
@@ -1839,6 +1957,8 @@ namespace KerbalConstructionTime
                 else
                 {
                     setActive = new KCT_KSC(site);
+                    if (CurrentGameIsCareer())
+                        setActive.ActiveLPInstance.level = 0;
                     KCT_GameStates.KSCs.Add(setActive);
                     KCT_GameStates.ActiveKSC = setActive;
                 }
@@ -1857,7 +1977,8 @@ namespace KerbalConstructionTime
             bool intact = true;
             if (type == KCT_BuildListVessel.ListType.VAB)
             {
-                intact = new PreFlightTests.FacilityOperational("LaunchPad", "building").Test();
+                //intact = new PreFlightTests.FacilityOperational("LaunchPad", "building").Test();
+                intact = new PreFlightTests.FacilityOperational("LaunchPad", "LaunchPad").Test();
             }
             else if (type == KCT_BuildListVessel.ListType.SPH)
             {
@@ -1865,7 +1986,7 @@ namespace KerbalConstructionTime
                     intact = false;
                 if (!new PreFlightTests.FacilityOperational("Runway", "End27").Test())
                     intact = false;*/
-                if (!new PreFlightTests.FacilityOperational("Runway", "Section1").Test())
+               /* if (!new PreFlightTests.FacilityOperational("Runway", "Section1").Test())
                     intact = false;
                 if (!new PreFlightTests.FacilityOperational("Runway", "Section2").Test())
                     intact = false;
@@ -1874,6 +1995,8 @@ namespace KerbalConstructionTime
                 if (!new PreFlightTests.FacilityOperational("Runway", "Section4").Test())
                     intact = false;
                 if (!new PreFlightTests.FacilityOperational("Runway", "Section5").Test())
+                    intact = false;*/
+                if (!new PreFlightTests.FacilityOperational("Runway", "Runway").Test())
                     intact = false;
             }
             return intact;
@@ -2173,7 +2296,7 @@ namespace KerbalConstructionTime
             int lvl = 0;
             if (HighLogic.CurrentGame.Mode == Game.Modes.CAREER)
             {
-                lvl = (int)(2*ScenarioUpgradeableFacilities.GetFacilityLevel(facility));
+                lvl = (int)(2 * ScenarioUpgradeableFacilities.GetFacilityLevel(facility));
             }
             else
             {
@@ -2182,7 +2305,6 @@ namespace KerbalConstructionTime
             }
             return lvl;
         }
-
 
         public static int TotalUpgradePoints()
         {
