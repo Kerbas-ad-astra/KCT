@@ -393,6 +393,7 @@ namespace KerbalConstructionTime
 
         public void BruteForceLocateVessel()
         {
+            KCTDebug.Log("Brute force looking for "+shipName);
             bool found = false;
             found = KSC.VABList.Exists(b => b.id == this.id);
             if (found) { type = ListType.VAB; return; }
@@ -426,10 +427,11 @@ namespace KerbalConstructionTime
 
         public void Launch()
         {
-            if (type == ListType.VAB)
+            if (GetEditorFacility() == EditorFacilities.VAB)
                 HighLogic.CurrentGame.editorFacility = EditorFacility.VAB;
             else
                 HighLogic.CurrentGame.editorFacility = EditorFacility.SPH;
+           // HighLogic.CurrentGame.editorFacility = GetEditorFacility();
             
             KCT_GameStates.flightSimulated = false;
             string tempFile = KSPUtil.ApplicationRootPath + "saves/" + HighLogic.SaveFolder + "/Ships/temp.craft";
@@ -524,6 +526,10 @@ namespace KerbalConstructionTime
                 TotalMass += ShipConstruction.GetPartTotalMass(p, KCT_Utilities.GetAvailablePartByName(KCT_Utilities.PartNameFromNode(p)), out n1, out n2);
                 emptyMass += n1;
             }
+            if (TotalMass < 0)
+                TotalMass = 0;
+            if (emptyMass < 0)
+                emptyMass = 0;
             return TotalMass;
         }
 

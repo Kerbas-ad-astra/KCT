@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+using KSP.UI.Dialogs;
 
 namespace KerbalConstructionTime
 {
@@ -34,7 +35,7 @@ namespace KerbalConstructionTime
             GUILayout.BeginVertical();
             GUILayout.Label("Presets", yellowText, GUILayout.ExpandHeight(false));
             //preset toolbar in a scrollview
-            presetScrollView = GUILayout.BeginScrollView(presetScrollView, HighLogic.Skin.textArea, GUILayout.Width(presetPosition.width/6.0f));
+            presetScrollView = GUILayout.BeginScrollView(presetScrollView, GUILayout.Width(presetPosition.width/6.0f)); //TODO: update HighLogic.Skin.textArea
             string[] presetShortNames = KCT_PresetManager.Instance.PresetShortNames(true);
             if (presetIndex == -1)
             {
@@ -85,18 +86,19 @@ namespace KerbalConstructionTime
             }
             if (WorkingPreset.AllowDeletion && presetIndex != presetShortNames.Length - 1 && GUILayout.Button("Delete Preset")) //allowed to be deleted and isn't Custom
             {
-                DialogOption[] options = new DialogOption[2];
-                options[0] = new DialogOption("Delete File", DeleteActivePreset);
-                options[1] = new DialogOption("Cancel", DummyVoid);
-                MultiOptionDialog dialog = new MultiOptionDialog("Are you sure you want to delete the selected Preset, file and all? This cannot be undone!", windowTitle: "Confirm Deletion", options: options);
-                PopupDialog.SpawnPopupDialog(dialog, false, HighLogic.Skin);
+
+                DialogGUIBase[] options = new DialogGUIBase[2];
+                options[0] = new DialogGUIButton("Delete File", DeleteActivePreset);
+                options[1] = new DialogGUIButton("Cancel", DummyVoid);
+                MultiOptionDialog dialog = new MultiOptionDialog("Are you sure you want to delete the selected Preset, file and all? This cannot be undone!", "Confirm Deletion", null, options);
+                PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), dialog, false, HighLogic.UISkin);
             }
             GUILayout.EndVertical();
 
             //Main sections
             GUILayout.BeginVertical();
             presetMainScroll = GUILayout.BeginScrollView(presetMainScroll);
-            //Preset info section
+            //Preset info section)
             GUILayout.BeginVertical(HighLogic.Skin.textArea);
             GUILayout.Label("Preset Name: " + WorkingPreset.name);
             GUILayout.Label("Description: " + WorkingPreset.description);

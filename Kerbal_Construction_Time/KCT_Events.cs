@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using System.Collections;
+using KSP.UI.Screens;
 
 namespace KerbalConstructionTime
 {
@@ -63,10 +64,20 @@ namespace KerbalConstructionTime
                 }
             });*/
 
+            GameEvents.onGUIAdministrationFacilitySpawn.Add(HideAllGUIs);
+            GameEvents.onGUIAstronautComplexSpawn.Add(HideAllGUIs);
+            GameEvents.onGUIMissionControlSpawn.Add(HideAllGUIs);
+            GameEvents.onGUIRnDComplexSpawn.Add(HideAllGUIs);
+            GameEvents.onGUIKSPediaSpawn.Add(HideAllGUIs);
 
             eventAdded = true;
         }
 
+        public void HideAllGUIs()
+        {
+            //KCT_GUI.hideAll();
+            KCT_GUI.ClickOff();
+        }
        /* public void LevelLoadedEvent(GameScenes scene)
         {
             List<GameScenes> validScenes = new List<GameScenes> { GameScenes.SPACECENTER, GameScenes.TRACKSTATION, GameScenes.EDITOR };
@@ -92,7 +103,15 @@ namespace KerbalConstructionTime
         public void FacilityUpgradedEvent(Upgradeables.UpgradeableFacility facility, int lvl)
         {
             if (KCT_GUI.PrimarilyDisabled)
-                return;
+            {
+                bool isLaunchpad = facility.id.ToLower().Contains("launchpad");
+                if (!isLaunchpad)
+                    return;
+
+                //is a launch pad
+                KCT_GameStates.ActiveKSC.ActiveLPInstance.Upgrade(lvl);
+
+            }
 
 
             if (!(allowedToUpgrade || !KCT_PresetManager.Instance.ActivePreset.generalSettings.KSCUpgradeTimes))
@@ -266,7 +285,7 @@ namespace KerbalConstructionTime
                     KCT_GUI.ClickOff,
                     KCT_GUI.onHoverOn,
                     KCT_GUI.onHoverOff,
-                    KCT_Events.instance.DummyVoid, //TODO: List next ship here?
+                    KCT_Events.instance.DummyVoid,
                     KCT_Events.instance.DummyVoid,
                     ApplicationLauncher.AppScenes.FLIGHT | ApplicationLauncher.AppScenes.MAPVIEW | ApplicationLauncher.AppScenes.SPACECENTER | ApplicationLauncher.AppScenes.SPH | ApplicationLauncher.AppScenes.TRACKSTATION | ApplicationLauncher.AppScenes.VAB,
                     GameDatabase.Instance.GetTexture(texturePath, false));
@@ -324,14 +343,14 @@ namespace KerbalConstructionTime
                         foreach (KCT_TechItem techItem in KCT_GameStates.TechList)
                             techItem.UpdateBuildRate(KCT_GameStates.TechList.IndexOf(techItem));
                         double timeLeft = tech.BuildRate > 0 ? tech.TimeLeft : tech.EstimatedTimeLeft;
-                        ScreenMessages.PostScreenMessage("[KCT] Node will unlock in " + KCT_Utilities.GetFormattedTime(timeLeft), 4.0f, ScreenMessageStyle.UPPER_LEFT);
+                        ScreenMessages.PostScreenMessage("[KCT] Node will unlock in " + MagiCore.Utilities.GetFormattedTime(timeLeft), 4.0f, ScreenMessageStyle.UPPER_LEFT);
                     }
                 }
                 else
                 {
                     ResearchAndDevelopment.Instance.AddScience(tech.scienceCost, TransactionReasons.RnDTechResearch);
                     ScreenMessages.PostScreenMessage("[KCT] This node is already being researched!", 4.0f, ScreenMessageStyle.UPPER_LEFT);
-                    ScreenMessages.PostScreenMessage("[KCT] It will unlock in " + KCT_Utilities.GetFormattedTime((KCT_GameStates.TechList.First(t => t.techID == ev.host.techID)).TimeLeft), 4.0f, ScreenMessageStyle.UPPER_LEFT);
+                    ScreenMessages.PostScreenMessage("[KCT] It will unlock in " + MagiCore.Utilities.GetFormattedTime((KCT_GameStates.TechList.First(t => t.techID == ev.host.techID)).TimeLeft), 4.0f, ScreenMessageStyle.UPPER_LEFT);
                 }
             }
         }
@@ -446,7 +465,7 @@ namespace KerbalConstructionTime
             {
                 KCT_GameStates.BodiesVisited.Add(ev.to.bodyName);
                 var message = new ScreenMessage("[KCT] New simulation body unlocked: " + ev.to.bodyName, 4.0f, ScreenMessageStyle.UPPER_LEFT);
-                ScreenMessages.PostScreenMessage(message, true);
+                ScreenMessages.PostScreenMessage(message);
             }
         }
 
@@ -455,7 +474,7 @@ namespace KerbalConstructionTime
             if (!KCT_GUI.PrimarilyDisabled)
             {
                 //KCT_GameStates.flightSimulated = true; //no longer needed b/c that gui wont appear anymore!
-               // PopupDialog.SpawnPopupDialog("Warning!", "To launch vessels you must first build them in the VAB or SPH, then launch them through the main KCT window in the Space Center!", "Ok", false, HighLogic.Skin);
+               // PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), "Warning!", "To launch vessels you must first build them in the VAB or SPH, then launch them through the main KCT window in the Space Center!", "Ok", false, HighLogic.UISkin);
                 //open the build list to the right page
                 string selection = "VAB";
                 if (v.craftSubfolder.Contains("SPH"))
@@ -493,7 +512,7 @@ namespace KerbalConstructionTime
             }
         }
 
-        public void vesselRecoverEvent(ProtoVessel v)
+        public void vesselRecoverEvent(ProtoVessel v, bool unknownAsOfNow)
         {
             if (!KCT_PresetManager.Instance.ActivePreset.generalSettings.Enabled) return;
             if (!KCT_GameStates.flightSimulated && !v.vesselRef.isEVA)
