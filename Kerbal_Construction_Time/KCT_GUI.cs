@@ -267,7 +267,7 @@ namespace KerbalConstructionTime
                 showEditorGUI = clicked;
                 KCT_GameStates.showWindows[1] = showEditorGUI;
             }
-            else if ((HighLogic.LoadedScene == GameScenes.SPACECENTER) || (HighLogic.LoadedScene == GameScenes.TRACKSTATION) && !PrimarilyDisabled)
+            else if ((HighLogic.LoadedScene == GameScenes.SPACECENTER || HighLogic.LoadedScene == GameScenes.TRACKSTATION) && !PrimarilyDisabled)
             {
                 buildListWindowPosition.height = 1;
                 showBuildList = clicked;
@@ -813,6 +813,7 @@ namespace KerbalConstructionTime
                 GUI.DragWindow();
 
             CheckEditorLock();
+            ClampWindow(ref editorWindowPosition, strict: false);
         }
 
         //private static void ClearOutInventory()
@@ -1461,7 +1462,7 @@ namespace KerbalConstructionTime
         public static void ResetBLWindow(bool deselectList = true)
         {
             buildListWindowPosition.height = 1;
-            buildListWindowPosition.width = 400;
+            buildListWindowPosition.width = 500;
             if (deselectList)
                 SelectList("None");
             
@@ -2593,6 +2594,42 @@ namespace KerbalConstructionTime
         {
             window.x = (float)((Screen.width - window.width) / 2.0);
             window.y = (float)((Screen.height - window.height) / 2.0);
+        }
+
+        /// <summary>
+        /// Clamps a window to the screen
+        /// </summary>
+        /// <param name="window">The window Rect</param>
+        /// <param name="strict">If true, none of the window can go past the edge. 
+        /// If false, half the window can. Defaults to false.</param>
+        public static void ClampWindow(ref Rect window, bool strict = false)
+        {
+            if (strict)
+            {
+                if (window.x < 0)
+                    window.x = 0;
+                if (window.x + window.width > Screen.width)
+                    window.x = Screen.width - window.width;
+
+                if (window.y < 0)
+                    window.y = 0;
+                if (window.y + window.height > Screen.height)
+                    window.y = Screen.height - window.height;
+            }
+            else
+            {
+                float halfW = window.width / 2;
+                float halfH = window.height / 2;
+                if (window.x + halfW < 0)
+                    window.x = -halfW;
+                if (window.x + halfW > Screen.width)
+                    window.x = Screen.width - halfW;
+
+                if (window.y + halfH < 0)
+                    window.y = -halfH;
+                if (window.y + halfH > Screen.height)
+                    window.y = Screen.height - halfH;
+            }
         }
     }
 

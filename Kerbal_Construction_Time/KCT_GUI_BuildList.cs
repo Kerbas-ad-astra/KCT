@@ -74,8 +74,8 @@ namespace KerbalConstructionTime
 
         public static void DrawBuildListWindow(int windowID)
         {
-            if (buildListWindowPosition.xMax > Screen.width)
-                buildListWindowPosition.x = Screen.width - buildListWindowPosition.width;
+            //if (buildListWindowPosition.xMax > Screen.width)
+            //    buildListWindowPosition.x = Screen.width - buildListWindowPosition.width;
 
             //if (Input.touchCount == 0) MouseOnRolloutButton = false;
 
@@ -940,7 +940,7 @@ namespace KerbalConstructionTime
                     GUILayout.Label(KCTTech.AsIKCTBuildItem().GetItemName());
                     GUILayout.Label(Math.Round(100 * KCTTech.progress / KCTTech.BP, 2) + " %", GUILayout.Width(width1 / 2));
                     GUILayout.Label(MagiCore.Utilities.GetColonFormattedTime(KCTTech.AsIKCTBuildItem().GetTimeLeft()), GUILayout.Width(width1));
-                    if (!HighLogic.LoadedSceneIsEditor && GUILayout.Button("Warp To", GUILayout.Width(70)))
+                    if (!HighLogic.LoadedSceneIsEditor && GUILayout.Button("Warp", GUILayout.Width(70)))
                     {
                         KCT_GameStates.targetedItem = KCTTech;
                         KCT_GameStates.canWarp = true;
@@ -1060,8 +1060,10 @@ namespace KerbalConstructionTime
             GUILayout.EndVertical();
 
            // if (ToolbarManager.ToolbarAvailable && ToolbarManager.Instance != null && KCT_GameStates.settings.PreferBlizzyToolbar)
-                if (!Input.GetMouseButtonDown(1) && !Input.GetMouseButtonDown(2))
-                    GUI.DragWindow();
+            if (!Input.GetMouseButtonDown(1) && !Input.GetMouseButtonDown(2))
+                GUI.DragWindow();
+
+            ClampWindow(ref buildListWindowPosition, strict: true);
         }
 
         public static void CancelTechNode(int index)
@@ -1170,6 +1172,7 @@ namespace KerbalConstructionTime
             if (KCT_GameStates.ActiveKSC.Recon_Rollout.Find(rr => rr.RRType == KCT_Recon_Rollout.RolloutReconType.Rollout && rr.associatedID == b.id.ToString()) != null && GUILayout.Button("Rollback"))
             {
                 KCT_GameStates.ActiveKSC.Recon_Rollout.Find(rr => rr.RRType == KCT_Recon_Rollout.RolloutReconType.Rollout && rr.associatedID == b.id.ToString()).SwapRolloutType();
+                showBLPlus = false;
             }
             if (!b.isFinished && GUILayout.Button("Warp To"))
             {
