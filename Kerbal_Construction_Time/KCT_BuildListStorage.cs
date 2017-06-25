@@ -116,33 +116,27 @@ namespace KerbalConstructionTime
             double progress, buildTime;
             [Persistent]
             String launchSite, flag;
-            [Persistent]
-            List<string> InventoryParts;
+            //[Persistent]
+            //List<string> InventoryParts;
             [Persistent]
             bool cannotEarnScience;
             [Persistent]
             float cost = 0, mass = 0, kscDistance = 0;
             [Persistent]
             int EditorFacility = 0, LaunchPadID = -1;
+            [Persistent]
+            List<string> desiredManifest = new List<string>();
 
             public KCT_BuildListVessel ToBuildListVessel()
             {
                 KCT_BuildListVessel ret = new KCT_BuildListVessel(shipName, launchSite, buildTime, flag, cost, EditorFacility);
                 ret.progress = progress;
-                if (InventoryParts != null)
-                {
-                    int ignore;
-                    if (InventoryParts.Count > 1 && int.TryParse(InventoryParts[1], out ignore))
-                        ret.InventoryParts = KCT_Utilities.PartListToDictAlternating(InventoryParts);
-                    else
-                        ret.InventoryParts = KCT_Utilities.PartListToDict(InventoryParts);
-
-                }
                 ret.id = new Guid(shipID);
                 ret.cannotEarnScience = cannotEarnScience;
                 ret.TotalMass = mass;
                 ret.DistanceFromKSC = kscDistance;
                 ret.launchSiteID = LaunchPadID;
+                ret.DesiredManifest = desiredManifest;
                 return ret;
             }
 
@@ -154,7 +148,6 @@ namespace KerbalConstructionTime
                 this.flag = blv.flag;
                 //this.shipURL = blv.shipURL;
                 this.shipName = blv.shipName;
-                this.InventoryParts = KCT_Utilities.PartDictToList(blv.InventoryParts);
                 this.shipID = blv.id.ToString();
                 this.cannotEarnScience = blv.cannotEarnScience;
                 this.cost = blv.cost;
@@ -162,6 +155,7 @@ namespace KerbalConstructionTime
                 this.kscDistance = blv.DistanceFromKSC;
                 this.EditorFacility = (int)blv.GetEditorFacility();
                 this.LaunchPadID = blv.launchSiteID;
+                this.desiredManifest = blv.DesiredManifest;
                 return this;
 
             }

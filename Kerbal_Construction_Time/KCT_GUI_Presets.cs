@@ -90,7 +90,7 @@ namespace KerbalConstructionTime
                 DialogGUIBase[] options = new DialogGUIBase[2];
                 options[0] = new DialogGUIButton("Delete File", DeleteActivePreset);
                 options[1] = new DialogGUIButton("Cancel", DummyVoid);
-                MultiOptionDialog dialog = new MultiOptionDialog("Are you sure you want to delete the selected Preset, file and all? This cannot be undone!", "Confirm Deletion", null, options);
+                MultiOptionDialog dialog = new MultiOptionDialog("deletePresetPopup", "Are you sure you want to delete the selected Preset, file and all? This cannot be undone!", "Confirm Deletion", null, options);
                 PopupDialog.SpawnPopupDialog(new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), dialog, false, HighLogic.UISkin);
             }
             GUILayout.EndVertical();
@@ -115,9 +115,6 @@ namespace KerbalConstructionTime
             WorkingPreset.generalSettings.ReconditioningTimes = GUILayout.Toggle(WorkingPreset.generalSettings.ReconditioningTimes, "Launchpad Reconditioning", HighLogic.Skin.button);
             WorkingPreset.generalSettings.TechUnlockTimes = GUILayout.Toggle(WorkingPreset.generalSettings.TechUnlockTimes, "Tech Unlock Times", HighLogic.Skin.button);
             WorkingPreset.generalSettings.KSCUpgradeTimes = GUILayout.Toggle(WorkingPreset.generalSettings.KSCUpgradeTimes, "KSC Upgrade Times", HighLogic.Skin.button);
-            //WorkingPreset.generalSettings.Simulations = GUILayout.Toggle(WorkingPreset.generalSettings.Simulations, "Allow Simulations", HighLogic.Skin.button);
-            //WorkingPreset.generalSettings.SimulationCosts = GUILayout.Toggle(WorkingPreset.generalSettings.SimulationCosts, "Simulation Costs", HighLogic.Skin.button);
-            //WorkingPreset.generalSettings.RequireVisitsForSimulations = GUILayout.Toggle(WorkingPreset.generalSettings.RequireVisitsForSimulations, "Must Visit Planets", HighLogic.Skin.button);
             WorkingPreset.generalSettings.TechUpgrades = GUILayout.Toggle(WorkingPreset.generalSettings.TechUpgrades, "Upgrades From Tech Tree", HighLogic.Skin.button);
             WorkingPreset.generalSettings.SharedUpgradePool = GUILayout.Toggle(WorkingPreset.generalSettings.SharedUpgradePool, "Shared Upgrade Pool (KSCSwitcher)", HighLogic.Skin.button);
 
@@ -231,16 +228,6 @@ namespace KerbalConstructionTime
                 GUILayout.Label("BuildRate: ");
                 WorkingPreset.formulaSettings.BuildRateFormula = GUILayout.TextField(WorkingPreset.formulaSettings.BuildRateFormula, GUILayout.Width(textWidth));
                 GUILayout.EndHorizontal();
-
-                //GUILayout.BeginHorizontal();
-                //GUILayout.Label("SimCost: ");
-                //WorkingPreset.formulaSettings.SimCostFormula = GUILayout.TextField(WorkingPreset.formulaSettings.SimCostFormula, GUILayout.Width(textWidth));
-                //GUILayout.EndHorizontal();
-
-                //GUILayout.BeginHorizontal();
-                //GUILayout.Label("KerbinSimCost: ");
-                //WorkingPreset.formulaSettings.KerbinSimCostFormula = GUILayout.TextField(WorkingPreset.formulaSettings.KerbinSimCostFormula, GUILayout.Width(textWidth));
-                //GUILayout.EndHorizontal();
 
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("UpgradeReset: ");

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 using System.IO;
+using KSP.UI;
 
 namespace KerbalConstructionTime
 {
@@ -15,8 +16,6 @@ namespace KerbalConstructionTime
         public int launchSiteID = -1;
         public ListType type;
         public enum ListType { None, VAB, SPH, TechNode, Reconditioning, KSC };
-        //public List<string> InventoryParts;
-        public Dictionary<string, int> InventoryParts;
         public ConfigNode shipNode;
         public Guid id;
         public bool cannotEarnScience;
@@ -33,9 +32,9 @@ namespace KerbalConstructionTime
                     return double.PositiveInfinity;
             }
         }
-        public List<Part> ExtractedParts { 
-            get 
-            { 
+        public List<Part> ExtractedParts {
+            get
+            {
                 List<Part> temp = new List<Part>();
                 foreach (PseudoPart PP in this.GetPseudoParts())
                 {
@@ -44,7 +43,7 @@ namespace KerbalConstructionTime
                     temp.Add(p);
                 }
                 return temp;
-            } 
+            }
         }
         public List<ConfigNode> ExtractedPartNodes
         {
@@ -54,10 +53,24 @@ namespace KerbalConstructionTime
             }
         }
         public bool isFinished { get { return progress >= buildPoints; } }
-        public KCT_KSC KSC { get { 
-            return KCT_GameStates.KSCs.FirstOrDefault(k => ((k.VABList.FirstOrDefault(s => s.id == this.id) != null || k.VABWarehouse.FirstOrDefault(s => s.id == this.id) != null)
-            || (k.SPHList.FirstOrDefault(s => s.id == this.id) != null || k.SPHWarehouse.FirstOrDefault(s => s.id == this.id) != null))); 
-        } }
+
+        private KCT_KSC _ksc = null;
+        public KCT_KSC KSC
+        {
+            get
+            {
+                if (_ksc == null)
+                {
+                    _ksc = KCT_GameStates.KSCs.FirstOrDefault(k => ((k.VABList.FirstOrDefault(s => s.id == this.id) != null || k.VABWarehouse.FirstOrDefault(s => s.id == this.id) != null)
+                        || (k.SPHList.FirstOrDefault(s => s.id == this.id) != null || k.SPHWarehouse.FirstOrDefault(s => s.id == this.id) != null)));
+                }
+                return _ksc;
+            }
+            set
+            {
+                _ksc = value;
+            }
+        }
 
         private bool? _allPartsValid;
         public bool allPartsValid
@@ -68,6 +81,16 @@ namespace KerbalConstructionTime
                     _allPartsValid = CheckPartsValid();
                 return (bool)_allPartsValid;
             }
+        }
+
+        private List<string> _desiredManifest = new List<string>();
+        /// <summary>
+        /// The default crew to use when assigning crew
+        /// </summary>
+        public List<string> DesiredManifest
+        {
+            set { _desiredManifest = value; }
+            get { return _desiredManifest; }
         }
 
         public KCT_BuildListVessel(ShipConstruct s, String ls, double bP, String flagURL)
@@ -90,9 +113,18 @@ namespace KerbalConstructionTime
                 type = ListType.SPH;
             else
                 type = ListType.None;
-            InventoryParts = new Dictionary<string, int>();
             id = Guid.NewGuid();
             cannotEarnScience = false;
+
+            //get the crew from the editorlogic
+            DesiredManifest = new List<string>();
+            if (CrewAssignmentDialog.Instance?.GetManifest()?.CrewCount > 0)
+            {
+                foreach (ProtoCrewMember crew in CrewAssignmentDialog.Instance.GetManifest().GetAllCrew(true) ?? new List<ProtoCrewMember>())
+                {
+                    DesiredManifest.Add(crew?.name);
+                }
+            }
         }
 
         public KCT_BuildListVessel(String name, String ls, double bP, String flagURL, float spentFunds, int EditorFacility)
@@ -109,7 +141,6 @@ namespace KerbalConstructionTime
                 type = ListType.SPH;
             else
                 type = ListType.None;
-            InventoryParts = new Dictionary<string, int>();
             cannotEarnScience = false;
             cost = spentFunds;
         }
@@ -123,7 +154,7 @@ namespace KerbalConstructionTime
                 KCTDebug.Log("Somehow tried to recover something that was null!");
                 return;
             }*/
-            
+
 
             id = Guid.NewGuid();
             shipName = vessel.vesselName;
@@ -133,23 +164,9 @@ namespace KerbalConstructionTime
             emptyCost = KCT_Utilities.GetTotalVesselCost(shipNode, false);
             TotalMass = 0;
             emptyMass = 0;
-            InventoryParts = new Dictionary<string, int>();
             foreach (ProtoPartSnapshot p in vessel.protoVessel.protoPartSnapshots)
             {
-                //InventoryParts.Add(p.partInfo.name + KCT_Utilities.GetTweakScaleSize(p));
                 string name = p.partInfo.name;
-                int amt = 1;
-                if (KCT_Utilities.PartIsProcedural(p))
-                {
-                    float dry, wet;
-                    ShipConstruction.GetPartCosts(p, p.partInfo, out dry, out wet);
-                    amt = (int)(1000 * dry);
-                }
-                else
-                {
-                    name += KCT_Utilities.GetTweakScaleSize(p);
-                }
-                KCT_Utilities.AddToDict(InventoryParts, name, amt);
 
                 TotalMass += p.mass;
                 emptyMass += p.mass;
@@ -157,12 +174,12 @@ namespace KerbalConstructionTime
                 {
                     PartResourceDefinition def = PartResourceLibrary.Instance.GetDefinition(rsc.resourceName);
                     if (def != null)
-						TotalMass += def.density * (float)rsc.amount;
+                        TotalMass += def.density * (float)rsc.amount;
                 }
             }
             cannotEarnScience = true;
 
-            buildPoints = KCT_Utilities.GetBuildTime(shipNode.GetNodes("PART").ToList(), true, InventoryParts);
+            buildPoints = KCT_Utilities.GetBuildTime(shipNode.GetNodes("PART").ToList(), false);
             flag = HighLogic.CurrentGame.flagURL;
             progress = buildPoints;
 
@@ -183,9 +200,16 @@ namespace KerbalConstructionTime
             Quaternion OriginalRotation = VesselToSave.vesselTransform.rotation;
             Vector3 OriginalPosition = VesselToSave.vesselTransform.position;
 
-            VesselToSave.SetRotation(new Quaternion(0, 0, 0, 1));
+            if (type == ListType.SPH)
+            {
+                VesselToSave.SetRotation(new Quaternion(0, 0, 0, 1)); //TODO: Figure out the orientation this should be
+            }
+            else
+            {
+                VesselToSave.SetRotation(new Quaternion(0, 0, 0, 1));
+            }
             Vector3 ShipSize = ShipConstruction.CalculateCraftSize(ConstructToSave);
-            VesselToSave.SetPosition(new Vector3(0, ShipSize.y + 2, 0));
+            VesselToSave.SetPosition(new Vector3(0, Math.Min(ShipSize.y + 2, 30), 0)); //Try to limit the max height we put the ship at. 60 is good for the VA but I don't know about the SPH. Lets be conservative with 30
 
             ConfigNode CN = new ConfigNode("ShipConstruct");
             CN = ConstructToSave.SaveShip();
@@ -248,7 +272,7 @@ namespace KerbalConstructionTime
             foreach (ConfigNode node in module.GetNodes("MODULE"))
                 SanitizeNode(partName, node, templates);
 
-            
+
             /*
             if (name.Contains("ModuleEngines"))
             {
@@ -279,14 +303,14 @@ namespace KerbalConstructionTime
                 module.RemoveNodes("ScienceData");
             }
             */
-            
+
         }
 
         private void CreateInitialTemplates()
         {
             ConfigNode templates = new ConfigNode("KCT_ModuleTemplates");
             ConfigNode module;
-            
+
             //ModuleEngines
             module = new ConfigNode("MODULE");
             module.AddValue("name", "ModuleEngines");
@@ -366,7 +390,7 @@ namespace KerbalConstructionTime
             ret.id = Guid.NewGuid();
             if (RecalcTime)
             {
-                ret.buildPoints = KCT_Utilities.GetBuildTime(ret.ExtractedPartNodes, true, this.InventoryParts.Count > 0);
+                ret.buildPoints = KCT_Utilities.GetBuildTime(ret.ExtractedPartNodes, true);
             }
             ret.TotalMass = this.TotalMass;
             ret.emptyMass = this.emptyMass;
@@ -432,8 +456,7 @@ namespace KerbalConstructionTime
             else
                 HighLogic.CurrentGame.editorFacility = EditorFacility.SPH;
            // HighLogic.CurrentGame.editorFacility = GetEditorFacility();
-            
-            KCT_GameStates.flightSimulated = false;
+
             string tempFile = KSPUtil.ApplicationRootPath + "saves/" + HighLogic.SaveFolder + "/Ships/temp.craft";
             UpdateRFTanks();
             shipNode.Save(tempFile);
@@ -545,73 +568,76 @@ namespace KerbalConstructionTime
         {
             string typeName="";
             bool removed = false;
-            KCT_KSC theKSC = this.KSC;
-            if (theKSC == null)
+            KSC = null; //force a refind
+            if (KSC == null) //I know this looks goofy, but it's a self-caching property that caches on "get"
             {
                 KCTDebug.Log("Could not find the KSC to remove vessel!");
                 return false;
             }
             if (type == ListType.SPH)
             {
-                if (theKSC.SPHWarehouse.Contains(this))
-                    removed = theKSC.SPHWarehouse.Remove(this);
-                else if (theKSC.SPHList.Contains(this))
-                    removed = theKSC.SPHList.Remove(this);
+
+                removed = KSC.SPHWarehouse.Remove(this);
+                if (!removed)
+                {
+                    removed = KSC.SPHList.Remove(this);
+                }
                 typeName="SPH";
             }
             else if (type == ListType.VAB)
             {
-                if (theKSC.VABWarehouse.Contains(this))
-                    removed = theKSC.VABWarehouse.Remove(this);
-                else if (theKSC.VABList.Contains(this))
-                    removed = theKSC.VABList.Remove(this);
+                removed = KSC.VABWarehouse.Remove(this);
+                if (!removed)
+                {
+                    removed = KSC.VABList.Remove(this);
+                }
                 typeName="VAB";
             }
             KCTDebug.Log("Removing " + shipName + " from "+ typeName +" storage/list.");
             if (!removed)
             {
                 KCTDebug.Log("Failed to remove ship from list! Performing direct comparison of ids...");
-                foreach (KCT_BuildListVessel blv in theKSC.SPHWarehouse)
+                foreach (KCT_BuildListVessel blv in KSC.SPHWarehouse)
                 {
                     if (blv.id == this.id)
                     {
                         KCTDebug.Log("Ship found in SPH storage. Removing...");
-                        removed = theKSC.SPHWarehouse.Remove(blv);
+                        removed = KSC.SPHWarehouse.Remove(blv);
                         break;
                     }
                 }
                 if (!removed)
                 {
-                    foreach (KCT_BuildListVessel blv in theKSC.VABWarehouse)
+                    foreach (KCT_BuildListVessel blv in KSC.VABWarehouse)
                     {
                         if (blv.id == this.id)
                         {
                             KCTDebug.Log("Ship found in VAB storage. Removing...");
-                            removed = theKSC.VABWarehouse.Remove(blv);
+                            removed = KSC.VABWarehouse.Remove(blv);
                             break;
                         }
                     }
                 }
                 if (!removed)
                 {
-                    foreach (KCT_BuildListVessel blv in theKSC.VABList)
+                    foreach (KCT_BuildListVessel blv in KSC.VABList)
                     {
                         if (blv.id == this.id)
                         {
                             KCTDebug.Log("Ship found in VAB List. Removing...");
-                            removed = theKSC.VABList.Remove(blv);
+                            removed = KSC.VABList.Remove(blv);
                             break;
                         }
                     }
                 }
                 if (!removed)
                 {
-                    foreach (KCT_BuildListVessel blv in theKSC.SPHList)
+                    foreach (KCT_BuildListVessel blv in KSC.SPHList)
                     {
                         if (blv.id == this.id)
                         {
                             KCTDebug.Log("Ship found in SPH list. Removing...");
-                            removed = theKSC.SPHList.Remove(blv);
+                            removed = KSC.SPHList.Remove(blv);
                             break;
                         }
                     }
@@ -643,7 +669,7 @@ namespace KerbalConstructionTime
                     name = CN.GetValue("name");
                     pID = CN.GetValue("uid");
                 }
-                
+
                 //for (int i = 0; i < split.Length - 1; i++)
                 //    pName += split[i];
                 PseudoPart returnPart = new PseudoPart(name, pID);
@@ -727,7 +753,7 @@ namespace KerbalConstructionTime
     {
         public string name;
         public uint uid;
-        
+
         public PseudoPart(string PartName, uint ID)
         {
             name = PartName;
